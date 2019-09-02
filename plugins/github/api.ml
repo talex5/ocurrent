@@ -56,8 +56,14 @@ type t = {
   get_token : unit -> token Lwt.t;
   token_lock : Lwt_mutex.t;
   mutable token : token;
-  mutable head_inputs : Current_git.Commit_id.t Current.Input.t Repo_map.t;
+  mutable head_inputs : commit Current.Input.t Repo_map.t;
 }
+and commit = t * Current_git.Commit_id.t
+
+module Commit = struct
+  type t = commit
+  let id = snd
+end
 
 let v ~get_token account =
   let head_inputs = Repo_map.empty in
@@ -182,7 +188,7 @@ let default_ref t { Repo_id.owner; name } =
 let make_head_commit_input t repo =
   let read () =
     Lwt.catch
-      (fun () -> default_ref t repo >|= Stdlib.Result.ok)
+      (fun () -> default_ref t repo >|= fun c -> Ok (t, c))
       (fun ex -> Lwt_result.fail @@ `Msg (Fmt.strf "GitHub query for %a failed: %a" Repo_id.pp repo Fmt.exn ex))
   in
   let watch refresh =
@@ -319,9 +325,9 @@ end
 
 module Set_status_cache = Current_cache.Output(Set_status)
 
-let set_commit_status t commit context status =
+let set_commit_status commit context status =
   Current.component "set_status" |>
-  let> commit = commit
+  let> (t, commit) = commit
   and> status = status in
   Set_status_cache.set t {Set_status.Key.commit; context} status
 
