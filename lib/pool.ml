@@ -50,7 +50,7 @@ let get ~switch t =
         Prometheus.Summary.observe (Metrics.wait_time t.label) (stop_wait -. start_wait);
         Prometheus.Gauge.inc_one (Metrics.resources_in_use t.label);
         t.used <- t.used + 1;
-        Switch.add_hook_or_exec switch (fun _reason ->
+        Lwt.protected @@ Switch.add_hook_or_exec switch (fun _reason ->
             assert (t.used > 0);
             Prometheus.Gauge.dec_one (Metrics.resources_in_use t.label);
             t.used <- t.used - 1;
@@ -62,9 +62,10 @@ let get ~switch t =
       ) else Fmt.failwith "Cancelled waiting for resource from pool %S" t.label
     ) else (
       Prometheus.Gauge.inc_one (Metrics.qlen t.label);
-      Lwt_condition.wait t.cond >>= fun () ->
-      Prometheus.Gauge.dec_one (Metrics.qlen t.label);
-      aux ()
+      Lwt.finalize
+        (fun () -> Lwt_condition.wait t.cond)
+        (fun () -> Prometheus.Gauge.dec_one (Metrics.qlen t.label); Lwt.return_unit)
+      >>= aux
     )
   in
   let res = aux () in
