@@ -59,13 +59,11 @@ module Run = struct
     Current.Job.start job ~level:Current.Level.Average >>= fun () ->
     let ready, set_ready = Lwt.wait () in
     containers := Containers.add key set_ready !containers;
-    Current.Switch.add_hook_or_exec switch (function
-        | Ok () -> Lwt.return_unit
-        | Error (`Msg m) ->
-          if Lwt.state ready = Lwt.Sleep then (
-            Lwt.wakeup set_ready @@ Error (`Msg m);
-          );
-          Lwt.return_unit
+    Current.Switch.add_cancel_hook_or_exec switch (fun m ->
+        if Lwt.state ready = Lwt.Sleep then (
+          Lwt.wakeup set_ready @@ Error (`Msg m);
+        );
+        Lwt.return_unit
       )
     >>= fun () ->
     ready

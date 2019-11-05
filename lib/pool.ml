@@ -53,7 +53,7 @@ let check t =
 let get ~switch t =
   let ready, set_ready = Lwt.wait () in
   let node = Lwt_dllist.add_r set_ready t.queue in
-  Switch.add_hook_or_exec switch (fun _ex ->
+  Switch.add_cancel_hook_or_exec switch (fun _ex ->
       Lwt_dllist.remove node;
       if Lwt.is_sleeping ready then Lwt.wakeup_later set_ready `Cancel;
       Lwt.return_unit
@@ -61,7 +61,7 @@ let get ~switch t =
   check t;
   let start_wait = Unix.gettimeofday () in
   Prometheus.Gauge.inc_one (Metrics.qlen t.label);
-  ready >|= fun ready ->
+  ready >>= fun ready ->
   Prometheus.Gauge.dec_one (Metrics.qlen t.label);
   match ready with
   | `Cancel -> Fmt.failwith "Cancelled waiting for resource from pool %S" t.label
@@ -69,7 +69,7 @@ let get ~switch t =
     let stop_wait = Unix.gettimeofday () in
     Prometheus.Summary.observe (Metrics.wait_time t.label) (stop_wait -. start_wait);
     Prometheus.Gauge.inc_one (Metrics.resources_in_use t.label);
-    Switch.add_hook_or_fail switch (fun _reason ->
+    Switch.add_release_hook_or_exec switch (fun _reason ->
         assert (t.used > 0);
         Prometheus.Gauge.dec_one (Metrics.resources_in_use t.label);
         t.used <- t.used - 1;

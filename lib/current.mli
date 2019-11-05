@@ -203,29 +203,32 @@ module Switch : sig
   (** [create ~label ()] is a fresh switch, initially on.
       @param label If the switch is GC'd while on, this is logged in the error message. *)
 
-  val create_off : unit or_error -> t
-  (** [create_off reason] is a fresh switch, initially (and always) off. *)
+  val create_off : string -> t
+  (** [create_off label] is a fresh switch, initially (and always) off. *)
 
-  val add_hook_or_exec : t -> (unit or_error -> unit Lwt.t) -> unit Lwt.t
-  (** [add_hook_or_exec switch fn] pushes [fn] on to the stack of functions to call
-      when [t] is turned off. If [t] is already off, calls [fn] immediately.
-      If [t] is in the process of being turned off, waits for that to complete
-      and then runs [fn]. *)
+  val add_cancel_hook_or_exec : t -> (string -> unit Lwt.t) -> unit Lwt.t
+  (** [add_cancel_hook_or_exec switch fn] pushes [fn] on to the stack of
+      functions to call if [t] is cancelled. If [t] is already cancelled or
+      off, calls [fn] immediately. If [t] is in the process of being cancelling
+      (or being turned off), waits for that to complete and then runs [fn].
+      The argument to [f] is the reason for the cancellation. *)
 
-  val add_hook_or_exec_opt : t option -> (unit or_error -> unit Lwt.t) -> unit Lwt.t
-  (** [add_hook_or_exec_opt] is like [add_hook_or_exec], but does nothing if the switch
-      is [None]. *)
+  val add_release_hook_or_exec : t -> (unit -> unit Lwt.t) -> unit Lwt.t
+  (** [add_release_hook_or_exec switch fn] pushes [fn] on to the stack of
+      functions to call when [t] is turned off. If [t] is already turned off,
+      calls [fn] immediately. *)
 
-  val turn_off : t -> unit or_error -> unit Lwt.t
-  (** [turn_off t reason] marks the switch as being turned off, then pops and
-      calls clean-up functions in order. When the last one finishes, the switch
-      is marked as off and cannot be used again. [reason] is passed to the
-      cleanup functions, which may be useful for logging. If the switch is
-      already off, this does nothing. If the switch is already being turned
-      off, it just waits for that to complete. *)
+  val turn_off : t -> unit Lwt.t
+  (** [turn_off t] calls all the registered release hooks in order. After calling
+      this, the switch can no longer be used. You must call this function exactly
+      once for each switch (unless no release hooks have been registered). *)
+
+  val cancel : t -> string -> unit Lwt.t
+  (** [cancel t reason] calls all registered cancel hooks in order. After calling
+      this, [add_cancel_hook_or_exec] will exec immediately. *)
 
   val is_on : t -> bool
-  (** [is_on t] is [true] if [turn_off t] hasn't yet been called. *)
+  (** [is_on t] is [true] if [t] hasn't been cancelled or turned off yet. *)
 
   val add_timeout : t -> Duration.t -> unit
   (** [add_timeout t duration] adds a timeout that will wait for [duration] and

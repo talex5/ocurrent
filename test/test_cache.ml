@@ -218,13 +218,11 @@ module Publish = struct
     t.set_finished <- Some set_finished;
     t.state <- t.state ^ "-changing";
     t.next <- value;
-    Current.Switch.add_hook_or_exec switch (function
-        | Ok () -> Lwt.return_unit
-        | Error (`Msg reason) as e ->
-          Logs.info (fun f -> f "Cancelling: %s" reason);
-          t.state <- "cancelled";
-          complete t e;
-          Lwt.return_unit
+    Current.Switch.add_cancel_hook_or_exec switch (fun reason ->
+        Logs.info (fun f -> f "Cancelling: %s" reason);
+        t.state <- "cancelled";
+        complete t (Error (`Msg reason));
+        Lwt.return_unit
       )
     >>= fun () ->
     finished

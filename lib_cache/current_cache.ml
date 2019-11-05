@@ -168,10 +168,7 @@ module Output(Op : S.PUBLISHER) = struct
       Log.info (fun f -> f "Auto-cancelling %a" pp_op (output.key, op.value));
       op.autocancelled <- true;
       (* Cancel existing job. When that finishes, we'll get called again. *)
-      Lwt.async (fun () ->
-          Current.Switch.turn_off op.switch @@
-          Error (`Msg "Auto-cancelling job because it is no longer needed")
-        );
+      Lwt.async (fun () -> Current.Switch.cancel op.switch "Auto-cancelling job because it is no longer needed");
     | `Retry ->
         invalidate_output output;
         publish ~config output
@@ -254,7 +251,7 @@ module Output(Op : S.PUBLISHER) = struct
               )
            )
            (fun () ->
-              Current.Switch.turn_off switch @@ Ok ()
+              Current.Switch.turn_off switch
            )
       )
 
@@ -379,7 +376,7 @@ module Output(Op : S.PUBLISHER) = struct
         else `Running, op.finished in
       o.ref_count <- o.ref_count + 1;
       let cancel ~msg () =
-        Lwt.async (fun () -> Current.Switch.turn_off op.switch @@ Error (`Msg msg))
+        Lwt.async (fun () -> Current.Switch.cancel op.switch msg)
       in
       Error (`Active a), Current.Input.metadata ?job_id:o.job_id ~changed @@
       object
