@@ -24,8 +24,6 @@ depends: [
   "lwt"
   "yojson"
   "cohttp-lwt-unix"
-  "nocrypto"
-  "x509" {>= "0.7.0" & < "0.10"}
-  "tls"
+  "tls" {>= "0.11.0"}
   "dune" {>= "1.9"}
 ]
