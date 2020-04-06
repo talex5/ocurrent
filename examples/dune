@@ -32,4 +32,5 @@
    lwt.unix
    prometheus
    result
+   routes
    uri))
