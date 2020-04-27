@@ -96,7 +96,7 @@ let pool_cancel _switch () =
   Current.Job.cancel job1 "Cancel";
   Lwt.pause () >>= fun () ->
   Job.log job1 "Continuing job for a bit";
-  Alcotest.(check lwt_state) "Job cancelled" (Lwt.Fail (Failure "Cancelled waiting for resource from pool \"test\"")) (Lwt.state s1);
+  Alcotest.(check lwt_state) "Job cancelled" (Lwt.Fail (Failure "Waiting for resource from pool \"test\": cancelled")) (Lwt.state s1);
   Lwt.return_unit
 
 let tests =

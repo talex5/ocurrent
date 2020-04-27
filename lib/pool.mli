@@ -1,9 +1,22 @@
-type t
+class type ['a] offer = object
+  method accept : Switch.t -> 'a Lwt.t
+  method decline : unit
+end
 
-val create : label:string -> int -> t
+class type ['a] t = object
+  method get : ('a offer, [`Busy of string * unit Lwt.t]) result Lwt.t
+  method pp : Format.formatter -> unit
+end
 
-val get : on_cancel:((string -> unit Lwt.t) -> unit Lwt.t) -> switch:Switch.t -> t -> unit Lwt.t
-(** [get ~on_cancel ~switch t] waits for a resource and then returns.
-    The resource will be returned to the pool when [switch] is turned off. *)
+val create : label:string -> int -> unit t
 
-val pp : t Fmt.t
+val pair : 'a t -> 'b t -> ('a * 'b) t
+(** [pair a b] is a virtual pool that takes one item from [a] and one from [b]. *)
+
+val both : unit t -> unit t -> unit t
+(** [both a b] is like [pair] but where there is no result. *)
+
+val either : 'a t -> 'a t -> 'a t
+(** [either a b] is a virtual pool that takes one item from either [a] or [b]. *)
+
+val pp : _ t Fmt.t

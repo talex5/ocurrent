@@ -157,7 +157,65 @@ let with_handler t ~on_cancel fn =
     let node = Lwt_dllist.add_r on_cancel hooks in
     Lwt.finalize fn (fun () -> Lwt_dllist.remove node; Lwt.return_unit)
 
+let confirm_threshold t level : unit Pool.t =
+  object (self)
+    method pp f = Fmt.pf f "confirm-threshold > %a" Level.pp level
+
+    method get =
+      match Config.get_confirm t.config with
+      | Some threshold when Level.compare level threshold >= 0 ->
+        let msg = Fmt.strf "Waiting for %t" self#pp in
+        Lwt_result.fail (`Busy (msg, Lwt_condition.wait t.config.level_cond))
+      | _ ->
+        Lwt_result.return @@ object
+          method accept _switch = Lwt.return ()
+          method decline = ()
+        end
+  end
+
+let explicit_confirm t : unit Pool.t =
+  object
+    method pp f = Fmt.pf f "explicit confirmation"
+
+    method get =
+      match Lwt.state t.explicit_confirm with
+      | Lwt.Return () ->
+        Lwt_result.return @@ object
+          method accept _switch = Lwt.return ()
+          method decline = ()
+        end
+      | Lwt.Sleep ->
+        Lwt_result.fail (`Busy ("Need explicit confirmation", Lwt.protected t.explicit_confirm))
+      | Lwt.Fail ex ->
+        Lwt.fail ex
+  end
+
+let use_pool t (pool: 'a Pool.t) : 'a Lwt.t =
+  let rec aux () =
+    pool#get >>= function
+    | Ok offer ->
+      offer#accept t.switch
+    | Error (`Busy (msg, retry)) ->
+      log t "%s" msg;
+      on_cancel t (fun _ -> Lwt.cancel retry; Lwt.return_unit) >>= fun () ->
+      Lwt.try_bind
+        (fun () -> retry)
+        (fun () -> aux ())
+        (function
+          | Lwt.Canceled -> Fmt.failwith "%s: cancelled" msg
+          | ex -> Lwt.fail ex
+        )
+  in aux ()
+
 let confirm t ?pool level =
+  let confirmed = Pool.either (explicit_confirm t) (confirm_threshold t level) in
+  let pool =
+    match pool with
+    | Some pool -> Pool.both confirmed pool
+    | None -> confirmed
+  in
+  use_pool t pool
+(*
   let confirmed =
     let confirmed = Config.confirmed level t.config in
     on_cancel t (fun _ -> Lwt.cancel confirmed; Lwt.return_unit) >>= fun () ->
@@ -188,6 +246,7 @@ let confirm t ?pool level =
       res >|= fun () ->
       log t "Got resource from pool %a" Pool.pp pool
     ) else res
+*)
 
 let pp_duration f d =
   let d = Duration.to_f d in
