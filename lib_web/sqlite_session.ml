@@ -15,7 +15,7 @@ type t = {
 }
 
 let gensym () =
-  Base64.encode_exn (Cstruct.to_string (Mirage_crypto_rng.generate 30))
+  Base64.encode_exn (Mirage_crypto_rng.generate 30)
 
 let or_fail label x =
   match x with

@@ -14,7 +14,6 @@ let encode ~key ~iat ~app_id =
   let payload = to_yojson t |> Yojson.Safe.to_string |> b64encode in
   let data = header ^ payload in
   let signature =
-    let msg = Cstruct.of_string data in
-    Mirage_crypto_pk.Rsa.PKCS1.sign ~hash:`SHA256 ~key (`Message msg)
+    Mirage_crypto_pk.Rsa.PKCS1.sign ~hash:`SHA256 ~key (`Message data)
   in
-  Printf.sprintf "%s.%s" data (b64encode (Cstruct.to_string signature))
+  Printf.sprintf "%s.%s" data (b64encode signature)
